@@ -1,0 +1,687 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Video Captioner — Metricool Export</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0f0f0f;
+            color: #e0e0e0;
+            min-height: 100vh;
+        }
+        .container { max-width: 960px; margin: 0 auto; padding: 24px; }
+
+        h1 { font-size: 28px; margin-bottom: 8px; color: #fff; }
+        .subtitle { color: #888; margin-bottom: 32px; }
+
+        /* Steps */
+        .step {
+            background: #1a1a1a;
+            border: 1px solid #2a2a2a;
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 20px;
+        }
+        .step h2 {
+            font-size: 18px;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .step-num {
+            background: #3b82f6;
+            color: #fff;
+            width: 28px; height: 28px;
+            border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 14px; font-weight: 600;
+            flex-shrink: 0;
+        }
+
+        /* Inputs */
+        .input-row {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 12px;
+        }
+        input[type="text"], input[type="date"], input[type="number"] {
+            flex: 1;
+            background: #111;
+            border: 1px solid #333;
+            border-radius: 8px;
+            padding: 10px 14px;
+            color: #e0e0e0;
+            font-size: 14px;
+        }
+        input:focus { outline: none; border-color: #3b82f6; }
+
+        button {
+            background: #3b82f6;
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            padding: 10px 20px;
+            font-size: 14px;
+            cursor: pointer;
+            font-weight: 500;
+            white-space: nowrap;
+        }
+        button:hover { background: #2563eb; }
+        button:disabled { background: #333; color: #666; cursor: not-allowed; }
+        button.secondary { background: #333; color: #ccc; }
+        button.secondary:hover { background: #444; }
+        button.success { background: #22c55e; }
+
+        /* Toggle switches */
+        .toggle-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-bottom: 16px;
+        }
+        .toggle {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: #111;
+            border: 1px solid #333;
+            border-radius: 8px;
+            padding: 8px 14px;
+            cursor: pointer;
+            user-select: none;
+            transition: all 0.2s;
+        }
+        .toggle.active { border-color: #3b82f6; background: #1e293b; }
+        .toggle input { display: none; }
+        .toggle-dot {
+            width: 36px; height: 20px;
+            background: #333;
+            border-radius: 10px;
+            position: relative;
+            transition: background 0.2s;
+        }
+        .toggle.active .toggle-dot { background: #3b82f6; }
+        .toggle-dot::after {
+            content: '';
+            position: absolute;
+            width: 16px; height: 16px;
+            background: #fff;
+            border-radius: 50%;
+            top: 2px; left: 2px;
+            transition: transform 0.2s;
+        }
+        .toggle.active .toggle-dot::after { transform: translateX(16px); }
+
+        /* File list */
+        .file-list {
+            max-height: 300px;
+            overflow-y: auto;
+            background: #111;
+            border-radius: 8px;
+            padding: 12px;
+            margin-top: 12px;
+        }
+        .file-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid #222;
+            font-size: 13px;
+        }
+        .file-item:last-child { border-bottom: none; }
+        .file-name { color: #ccc; }
+        .match-badge {
+            background: #22c55e;
+            color: #000;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 600;
+        }
+        .no-match-badge {
+            background: #ef4444;
+            color: #fff;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+        }
+
+        /* Caption editor */
+        .caption-card {
+            background: #111;
+            border: 1px solid #2a2a2a;
+            border-radius: 8px;
+            padding: 16px;
+            margin-bottom: 12px;
+        }
+        .caption-card h3 {
+            font-size: 14px;
+            color: #888;
+            margin-bottom: 4px;
+        }
+        .caption-card .transcript {
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 8px;
+            font-style: italic;
+        }
+        .caption-card textarea {
+            width: 100%;
+            min-height: 80px;
+            background: #0a0a0a;
+            border: 1px solid #333;
+            border-radius: 6px;
+            padding: 10px;
+            color: #e0e0e0;
+            font-size: 14px;
+            font-family: inherit;
+            resize: vertical;
+        }
+        .caption-card textarea:focus { outline: none; border-color: #3b82f6; }
+
+        /* Schedule config */
+        .schedule-row {
+            display: flex;
+            gap: 16px;
+            align-items: end;
+            flex-wrap: wrap;
+            margin-bottom: 16px;
+        }
+        .schedule-field label {
+            display: block;
+            font-size: 12px;
+            color: #888;
+            margin-bottom: 4px;
+        }
+        .time-slots {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 8px;
+        }
+        .time-slot {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .time-slot input {
+            width: 90px;
+            background: #111;
+            border: 1px solid #333;
+            border-radius: 6px;
+            padding: 6px 10px;
+            color: #e0e0e0;
+            font-size: 14px;
+        }
+        .remove-time {
+            background: #333;
+            color: #ef4444;
+            border: none;
+            border-radius: 4px;
+            padding: 4px 8px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+
+        /* Inspiration */
+        .inspiration textarea {
+            width: 100%;
+            min-height: 100px;
+            background: #111;
+            border: 1px solid #333;
+            border-radius: 8px;
+            padding: 12px;
+            color: #e0e0e0;
+            font-size: 14px;
+            font-family: inherit;
+            resize: vertical;
+            margin-top: 8px;
+        }
+
+        /* Progress */
+        .progress-bar {
+            background: #222;
+            border-radius: 6px;
+            overflow: hidden;
+            height: 6px;
+            margin: 12px 0;
+        }
+        .progress-fill {
+            height: 100%;
+            background: #3b82f6;
+            transition: width 0.3s;
+        }
+        .status-text { font-size: 13px; color: #888; }
+
+        /* Hidden sections */
+        .hidden { display: none; }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: #111; }
+        ::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
+
+        .info-box {
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 8px;
+            padding: 12px;
+            font-size: 13px;
+            color: #94a3b8;
+            margin-top: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Video Captioner</h1>
+        <p class="subtitle">Transcribe videos, generate captions, export to Metricool</p>
+
+        <!-- Step 1: Sources -->
+        <div class="step" id="step-sources">
+            <h2><span class="step-num">1</span> Connect Your Videos</h2>
+
+            <div class="input-row">
+                <input type="text" id="drive-url" placeholder="Paste public Google Drive folder link...">
+                <button onclick="scanDrive()">Scan Drive</button>
+            </div>
+            <div class="input-row">
+                <input type="text" id="local-path" placeholder="Local video folder path (e.g. /Users/you/Videos/client)">
+                <button onclick="scanLocal()">Scan Local</button>
+            </div>
+
+            <div id="scan-results" class="hidden">
+                <button onclick="matchFiles()" style="margin-bottom:12px;">Match Files</button>
+                <div id="file-list" class="file-list"></div>
+            </div>
+        </div>
+
+        <!-- Step 2: Platforms -->
+        <div class="step" id="step-platforms">
+            <h2><span class="step-num">2</span> Platforms</h2>
+            <div class="toggle-group">
+                <label class="toggle active" data-platform="instagram">
+                    <input type="checkbox" checked>
+                    <span class="toggle-dot"></span>
+                    <span>Instagram Reels</span>
+                </label>
+                <label class="toggle active" data-platform="tiktok">
+                    <input type="checkbox" checked>
+                    <span class="toggle-dot"></span>
+                    <span>TikTok</span>
+                </label>
+                <label class="toggle active" data-platform="youtube">
+                    <input type="checkbox" checked>
+                    <span class="toggle-dot"></span>
+                    <span>YouTube Shorts</span>
+                </label>
+                <label class="toggle" data-platform="facebook">
+                    <input type="checkbox">
+                    <span class="toggle-dot"></span>
+                    <span>Facebook</span>
+                </label>
+                <label class="toggle" data-platform="threads">
+                    <input type="checkbox">
+                    <span class="toggle-dot"></span>
+                    <span>Threads</span>
+                </label>
+            </div>
+        </div>
+
+        <!-- Step 3: Caption Inspiration -->
+        <div class="step" id="step-inspiration">
+            <h2><span class="step-num">3</span> Caption Style & Inspiration</h2>
+            <p style="font-size:13px; color:#888; margin-bottom:8px;">
+                Describe the tone, style, and vibe for captions. Paste example captions if you have them.
+            </p>
+            <div class="inspiration">
+                <textarea id="inspiration-text" placeholder="Example: Motivational finance advisor. Short punchy captions. Use questions to hook. Include relevant hashtags. Speak to families trying to build generational wealth.
+
+Example captions:
+- The families who need financial guidance the most are the ones most often told it isn't for them. That's a lie worth correcting.
+- Money won't fix a mindset problem. But fixing the mindset will change everything about how you handle the money."></textarea>
+            </div>
+        </div>
+
+        <!-- Step 4: Transcribe -->
+        <div class="step" id="step-transcribe">
+            <h2><span class="step-num">4</span> Transcribe & Generate Captions</h2>
+            <div style="display:flex; gap:10px; align-items:center; margin-bottom:12px;">
+                <button onclick="transcribeAll()" id="btn-transcribe">Transcribe All Videos</button>
+                <select id="whisper-model" style="background:#111; border:1px solid #333; border-radius:6px; padding:8px; color:#e0e0e0;">
+                    <option value="base">Base (fast, good enough)</option>
+                    <option value="small">Small (better accuracy)</option>
+                    <option value="medium">Medium (best accuracy, slow)</option>
+                </select>
+            </div>
+            <div class="progress-bar hidden" id="transcribe-progress">
+                <div class="progress-fill" style="width:0%"></div>
+            </div>
+            <p class="status-text" id="transcribe-status"></p>
+
+            <div id="caption-editor" class="hidden" style="margin-top:16px;"></div>
+        </div>
+
+        <!-- Step 5: Schedule -->
+        <div class="step" id="step-schedule">
+            <h2><span class="step-num">5</span> Schedule & Export</h2>
+            <div class="schedule-row">
+                <div class="schedule-field">
+                    <label>Start Date</label>
+                    <input type="date" id="start-date">
+                </div>
+                <div class="schedule-field">
+                    <label>Posts Per Day</label>
+                    <input type="number" id="posts-per-day" value="1" min="1" max="10" style="width:80px">
+                </div>
+            </div>
+
+            <label style="font-size:12px; color:#888;">Posting Times (24hr format)</label>
+            <div class="time-slots" id="time-slots">
+                <div class="time-slot">
+                    <input type="text" value="08:00:00" class="time-input">
+                    <button class="remove-time" onclick="removeTime(this)">×</button>
+                </div>
+            </div>
+            <button class="secondary" onclick="addTime()" style="margin-top:8px; font-size:12px; padding:6px 12px;">+ Add Time</button>
+
+            <div style="margin-top:20px;">
+                <button class="success" onclick="exportCSV()" style="font-size:16px; padding:12px 32px;">
+                    Export Metricool CSV
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // State
+        let matchedFiles = [];
+        let transcripts = {};
+
+        // Set default start date to tomorrow
+        const tomorrow = new Date();
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        document.getElementById('start-date').value = tomorrow.toISOString().split('T')[0];
+
+        // Platform toggles
+        document.querySelectorAll('.toggle').forEach(toggle => {
+            toggle.addEventListener('click', () => {
+                toggle.classList.toggle('active');
+                const cb = toggle.querySelector('input');
+                cb.checked = !cb.checked;
+            });
+        });
+
+        // Posts per day -> time slots sync
+        document.getElementById('posts-per-day').addEventListener('change', function() {
+            const count = parseInt(this.value);
+            const container = document.getElementById('time-slots');
+            const current = container.querySelectorAll('.time-slot').length;
+
+            if (count > current) {
+                for (let i = current; i < count; i++) {
+                    addTime();
+                }
+            }
+        });
+
+        function addTime() {
+            const container = document.getElementById('time-slots');
+            const div = document.createElement('div');
+            div.className = 'time-slot';
+            div.innerHTML = `
+                <input type="text" value="14:30:00" class="time-input">
+                <button class="remove-time" onclick="removeTime(this)">×</button>
+            `;
+            container.appendChild(div);
+        }
+
+        function removeTime(btn) {
+            const container = document.getElementById('time-slots');
+            if (container.querySelectorAll('.time-slot').length > 1) {
+                btn.parentElement.remove();
+            }
+        }
+
+        // API calls
+        async function scanDrive() {
+            const url = document.getElementById('drive-url').value.trim();
+            if (!url) return alert('Paste a Google Drive folder link');
+
+            const resp = await fetch('/api/scan-drive', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({folder_url: url})
+            });
+            const data = await resp.json();
+            if (!data.success) return alert('Error: ' + data.error);
+
+            document.getElementById('scan-results').classList.remove('hidden');
+            updateFileList('drive', data.files);
+        }
+
+        async function scanLocal() {
+            const path = document.getElementById('local-path').value.trim();
+            if (!path) return alert('Enter your local video folder path');
+
+            const resp = await fetch('/api/scan-local', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({folder_path: path})
+            });
+            const data = await resp.json();
+            if (!data.success) return alert('Error: ' + data.error);
+
+            document.getElementById('scan-results').classList.remove('hidden');
+            updateFileList('local', data.files);
+        }
+
+        let driveFiles = [];
+        let localFiles = [];
+
+        function updateFileList(type, files) {
+            if (type === 'drive') driveFiles = files;
+            if (type === 'local') localFiles = files;
+
+            const list = document.getElementById('file-list');
+            let html = '';
+            if (driveFiles.length) {
+                html += `<div style="font-size:12px;color:#3b82f6;margin-bottom:6px;">Google Drive: ${driveFiles.length} videos</div>`;
+                driveFiles.forEach(f => {
+                    html += `<div class="file-item"><span class="file-name">☁️ ${f.name}</span></div>`;
+                });
+            }
+            if (localFiles.length) {
+                html += `<div style="font-size:12px;color:#22c55e;margin-bottom:6px;margin-top:12px;">Local: ${localFiles.length} videos</div>`;
+                localFiles.forEach(f => {
+                    html += `<div class="file-item"><span class="file-name">💾 ${f.name}</span></div>`;
+                });
+            }
+            list.innerHTML = html;
+        }
+
+        async function matchFiles() {
+            const resp = await fetch('/api/match-files', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({})
+            });
+            const data = await resp.json();
+            if (!data.success) return alert('Error matching files');
+
+            matchedFiles = data.matched;
+            const list = document.getElementById('file-list');
+            let html = `<div style="font-size:12px;color:#22c55e;margin-bottom:6px;">✅ ${data.matched.length} matched</div>`;
+
+            data.matched.forEach(m => {
+                html += `<div class="file-item">
+                    <span class="file-name">${m.local_name}</span>
+                    <span class="match-badge">MATCHED</span>
+                </div>`;
+            });
+
+            if (data.unmatched_local.length) {
+                html += `<div style="font-size:12px;color:#ef4444;margin-top:12px;margin-bottom:6px;">⚠️ ${data.unmatched_local.length} local files not on Drive</div>`;
+                data.unmatched_local.forEach(name => {
+                    html += `<div class="file-item">
+                        <span class="file-name">${name}</span>
+                        <span class="no-match-badge">NO MATCH</span>
+                    </div>`;
+                });
+            }
+
+            if (data.unmatched_drive.length) {
+                html += `<div style="font-size:12px;color:#ef4444;margin-top:12px;margin-bottom:6px;">⚠️ ${data.unmatched_drive.length} Drive files not found locally</div>`;
+                data.unmatched_drive.forEach(name => {
+                    html += `<div class="file-item">
+                        <span class="file-name">${name}</span>
+                        <span class="no-match-badge">NO LOCAL</span>
+                    </div>`;
+                });
+            }
+
+            list.innerHTML = html;
+        }
+
+        async function transcribeAll() {
+            const btn = document.getElementById('btn-transcribe');
+            const progress = document.getElementById('transcribe-progress');
+            const status = document.getElementById('transcribe-status');
+            const model = document.getElementById('whisper-model').value;
+
+            if (!matchedFiles.length) return alert('Match your files first (Step 1)');
+
+            btn.disabled = true;
+            btn.textContent = 'Transcribing...';
+            progress.classList.remove('hidden');
+
+            const inspiration = document.getElementById('inspiration-text').value;
+            const total = matchedFiles.length;
+            const results = [];
+
+            for (let i = 0; i < total; i++) {
+                const m = matchedFiles[i];
+                status.textContent = `Transcribing ${i + 1} of ${total}: ${m.local_name}...`;
+                progress.querySelector('.progress-fill').style.width = ((i + 1) / total * 100) + '%';
+
+                try {
+                    const resp = await fetch('/api/transcribe', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({video_path: m.local_path, model: model})
+                    });
+                    const data = await resp.json();
+                    if (data.success) {
+                        transcripts[m.local_path] = data.transcript;
+                        results.push({name: m.local_name, transcript: data.transcript, success: true});
+                    } else {
+                        results.push({name: m.local_name, error: data.error, success: false});
+                    }
+                } catch (e) {
+                    results.push({name: m.local_name, error: e.message, success: false});
+                }
+            }
+
+            status.textContent = `Done! ${results.filter(r => r.success).length} of ${total} transcribed.`;
+            btn.textContent = 'Re-transcribe All';
+            btn.disabled = false;
+
+            buildCaptionEditor(results);
+        }
+
+        function buildCaptionEditor(results) {
+            const editor = document.getElementById('caption-editor');
+            editor.classList.remove('hidden');
+            const inspiration = document.getElementById('inspiration-text').value;
+
+            let html = '<h3 style="margin-bottom:12px;color:#fff;">Edit Captions</h3>';
+            html += '<div class="info-box" style="margin-bottom:16px;">Review and edit each caption below. The transcript is shown for reference. Edit the caption to match your style.</div>';
+
+            results.forEach((r, i) => {
+                const matched = matchedFiles[i];
+                const transcript = r.success ? r.transcript : '(transcription failed)';
+                // Default caption is the transcript — user edits it
+                const defaultCaption = r.success ? r.transcript : '';
+
+                html += `
+                <div class="caption-card">
+                    <h3>${r.name}</h3>
+                    <div class="transcript">Transcript: ${transcript.substring(0, 200)}${transcript.length > 200 ? '...' : ''}</div>
+                    <textarea id="caption-${i}" data-index="${i}">${defaultCaption}</textarea>
+                </div>`;
+            });
+
+            editor.innerHTML = html;
+        }
+
+        function getActivePlatforms() {
+            const platforms = {};
+            document.querySelectorAll('.toggle').forEach(t => {
+                const name = t.dataset.platform;
+                platforms[name] = t.classList.contains('active');
+            });
+            return platforms;
+        }
+
+        async function exportCSV() {
+            const startDate = document.getElementById('start-date').value;
+            const postsPerDay = parseInt(document.getElementById('posts-per-day').value);
+
+            if (!startDate) return alert('Set a start date');
+            if (!matchedFiles.length) return alert('No matched files to export');
+
+            // Collect times
+            const times = [];
+            document.querySelectorAll('.time-input').forEach(input => {
+                let val = input.value.trim();
+                // Ensure HH:MM:SS format
+                if (/^\d{1,2}:\d{2}$/.test(val)) val += ':00';
+                times.push(val);
+            });
+
+            if (times.length < postsPerDay) {
+                return alert(`You have ${postsPerDay} posts/day but only ${times.length} time slots. Add more times.`);
+            }
+
+            // Collect captions
+            const captions = matchedFiles.map((m, i) => {
+                const textarea = document.getElementById(`caption-${i}`);
+                return {
+                    caption: textarea ? textarea.value : '',
+                    drive_link: m.drive_link,
+                    local_name: m.local_name,
+                };
+            });
+
+            const config = {
+                start_date: startDate,
+                posts_per_day: postsPerDay,
+                times: times.slice(0, postsPerDay),
+                platforms: getActivePlatforms(),
+            };
+
+            // Download CSV
+            const resp = await fetch('/api/export-csv', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({config, captions})
+            });
+
+            if (!resp.ok) return alert('Export failed');
+
+            const blob = await resp.blob();
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'metricool_export.csv';
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+    </script>
+</body>
+</html>

@@ -12,8 +12,58 @@ from pathlib import Path
 import requests
 from bs4 import BeautifulSoup
 from flask import Flask, render_template, request, jsonify, send_file
+import anthropic
 
 app = Flask(__name__)
+
+# ---------------------------------------------------------------------------
+# Claude caption generation
+# ---------------------------------------------------------------------------
+
+def generate_caption(transcript: str, inspiration: str, client_rules: str, example_captions: str, api_key: str) -> str:
+    """Generate a caption using Claude based on transcript + style guidance."""
+    client = anthropic.Anthropic(api_key=api_key)
+
+    system_prompt = """You are a social media caption writer. Your job is to write a single caption for a short-form video (Instagram Reel, TikTok, YouTube Short).
+
+Rules:
+- Write ONLY the caption text, nothing else
+- No quotation marks around the caption
+- Match the tone, length, and style of the example captions exactly
+- Use the video transcript to understand what the video is about
+- The caption should complement the video, not just repeat the transcript
+- Keep it punchy and engaging"""
+
+    user_prompt = f"""Write a caption for this video.
+
+VIDEO TRANSCRIPT:
+{transcript}
+
+"""
+    if client_rules.strip():
+        user_prompt += f"""CLIENT RULES (must follow):
+{client_rules}
+
+"""
+    if example_captions.strip():
+        user_prompt += f"""EXAMPLE CAPTIONS (match this style/tone/length):
+{example_captions}
+
+"""
+    if inspiration.strip():
+        user_prompt += f"""ADDITIONAL STYLE NOTES:
+{inspiration}
+
+"""
+    user_prompt += "Write the caption now:"
+
+    message = client.messages.create(
+        model="claude-sonnet-4-20250514",
+        max_tokens=300,
+        messages=[{"role": "user", "content": user_prompt}],
+        system=system_prompt,
+    )
+    return message.content[0].text.strip()
 
 # ---------------------------------------------------------------------------
 # Google Drive public folder scraper
@@ -245,6 +295,52 @@ def transcribe_all():
             results.append({"name": m["local_name"], "transcript": text, "success": True})
         except Exception as e:
             results.append({"name": m["local_name"], "error": str(e), "success": False})
+
+    return jsonify({"success": True, "results": results})
+
+
+@app.route("/api/generate-caption", methods=["POST"])
+def generate_caption_route():
+    """Generate a caption for a single video using Claude."""
+    data = request.json
+    transcript = data.get("transcript", "")
+    inspiration = data.get("inspiration", "")
+    client_rules = data.get("client_rules", "")
+    example_captions = data.get("example_captions", "")
+    api_key = data.get("api_key", "")
+
+    if not api_key:
+        return jsonify({"success": False, "error": "Anthropic API key required"}), 400
+    if not transcript:
+        return jsonify({"success": False, "error": "No transcript provided"}), 400
+
+    try:
+        caption = generate_caption(transcript, inspiration, client_rules, example_captions, api_key)
+        return jsonify({"success": True, "caption": caption})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/api/generate-all-captions", methods=["POST"])
+def generate_all_captions_route():
+    """Generate captions for all transcribed videos."""
+    data = request.json
+    transcripts = data.get("transcripts", {})
+    inspiration = data.get("inspiration", "")
+    client_rules = data.get("client_rules", "")
+    example_captions = data.get("example_captions", "")
+    api_key = data.get("api_key", "")
+
+    if not api_key:
+        return jsonify({"success": False, "error": "Anthropic API key required"}), 400
+
+    results = {}
+    for video_path, transcript in transcripts.items():
+        try:
+            caption = generate_caption(transcript, inspiration, client_rules, example_captions, api_key)
+            results[video_path] = {"caption": caption, "success": True}
+        except Exception as e:
+            results[video_path] = {"caption": "", "error": str(e), "success": False}
 
     return jsonify({"success": True, "results": results})
 

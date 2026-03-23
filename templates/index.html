@@ -333,24 +333,61 @@
             </div>
         </div>
 
-        <!-- Step 3: Caption Inspiration -->
-        <div class="step" id="step-inspiration">
-            <h2><span class="step-num">3</span> Caption Style & Inspiration</h2>
+        <!-- Step 3: API Key -->
+        <div class="step" id="step-api">
+            <h2><span class="step-num">3</span> Anthropic API Key</h2>
             <p style="font-size:13px; color:#888; margin-bottom:8px;">
-                Describe the tone, style, and vibe for captions. Paste example captions if you have them.
+                Needed for AI caption generation. Get one at <a href="https://console.anthropic.com" target="_blank" style="color:#3b82f6;">console.anthropic.com</a>. Stored locally only.
             </p>
-            <div class="inspiration">
-                <textarea id="inspiration-text" placeholder="Example: Motivational finance advisor. Short punchy captions. Use questions to hook. Include relevant hashtags. Speak to families trying to build generational wealth.
-
-Example captions:
-- The families who need financial guidance the most are the ones most often told it isn't for them. That's a lie worth correcting.
-- Money won't fix a mindset problem. But fixing the mindset will change everything about how you handle the money."></textarea>
+            <div class="input-row">
+                <input type="password" id="api-key" placeholder="sk-ant-..." style="flex:1; background:#111; border:1px solid #333; border-radius:8px; padding:10px 14px; color:#e0e0e0; font-size:14px;">
+                <button class="secondary" onclick="toggleKeyVisibility()" id="btn-toggle-key">Show</button>
             </div>
         </div>
 
-        <!-- Step 4: Transcribe -->
+        <!-- Step 4: Caption Style -->
+        <div class="step" id="step-inspiration">
+            <h2><span class="step-num">4</span> Caption Style & Rules</h2>
+
+            <div style="margin-bottom:16px;">
+                <label style="font-size:13px; color:#ccc; font-weight:500;">Client Rules</label>
+                <p style="font-size:12px; color:#666; margin-bottom:4px;">Specific rules for this client (e.g. never use certain words, always include a CTA, hashtag requirements)</p>
+                <div class="inspiration">
+                    <textarea id="client-rules" placeholder="Example:
+- Always end with a call to action
+- Never use the word 'hustle'
+- Include 3-5 hashtags
+- Keep captions under 150 words
+- Mention the brand name 'Wealth Builders' at least once"></textarea>
+                </div>
+            </div>
+
+            <div style="margin-bottom:16px;">
+                <label style="font-size:13px; color:#ccc; font-weight:500;">Example Captions (model captions to match)</label>
+                <p style="font-size:12px; color:#666; margin-bottom:4px;">Paste real captions from this client. AI will match this tone/style/length.</p>
+                <div class="inspiration">
+                    <textarea id="example-captions" placeholder="Paste 3-5 example captions, one per line:
+
+The families who need financial guidance the most are the ones most often told it isn't for them. That's a lie worth correcting.
+
+Money won't fix a mindset problem. But fixing the mindset will change everything about how you handle the money.
+
+You can earn well and still be financially trapped. Income is not the same thing as wealth."></textarea>
+                </div>
+            </div>
+
+            <div>
+                <label style="font-size:13px; color:#ccc; font-weight:500;">Additional Style Notes (optional)</label>
+                <p style="font-size:12px; color:#666; margin-bottom:4px;">Any extra guidance about tone, audience, vibe</p>
+                <div class="inspiration">
+                    <textarea id="inspiration-text" placeholder="Example: Motivational finance advisor. Short punchy captions. Speak to families trying to build generational wealth. Conversational but authoritative."></textarea>
+                </div>
+            </div>
+        </div>
+
+        <!-- Step 5: Transcribe -->
         <div class="step" id="step-transcribe">
-            <h2><span class="step-num">4</span> Transcribe & Generate Captions</h2>
+            <h2><span class="step-num">5</span> Transcribe & Generate Captions</h2>
             <div style="display:flex; gap:10px; align-items:center; margin-bottom:12px;">
                 <button onclick="transcribeAll()" id="btn-transcribe">Transcribe All Videos</button>
                 <select id="whisper-model" style="background:#111; border:1px solid #333; border-radius:6px; padding:8px; color:#e0e0e0;">
@@ -367,9 +404,9 @@ Example captions:
             <div id="caption-editor" class="hidden" style="margin-top:16px;"></div>
         </div>
 
-        <!-- Step 5: Schedule -->
+        <!-- Step 6: Schedule -->
         <div class="step" id="step-schedule">
-            <h2><span class="step-num">5</span> Schedule & Export</h2>
+            <h2><span class="step-num">6</span> Schedule & Export</h2>
             <div class="schedule-row">
                 <div class="schedule-field">
                     <label>Start Date</label>
@@ -402,11 +439,33 @@ Example captions:
         // State
         let matchedFiles = [];
         let transcripts = {};
+        let transcribeResults = [];
 
         // Set default start date to tomorrow
         const tomorrow = new Date();
         tomorrow.setDate(tomorrow.getDate() + 1);
         document.getElementById('start-date').value = tomorrow.toISOString().split('T')[0];
+
+        // API key toggle
+        function toggleKeyVisibility() {
+            const input = document.getElementById('api-key');
+            const btn = document.getElementById('btn-toggle-key');
+            if (input.type === 'password') {
+                input.type = 'text';
+                btn.textContent = 'Hide';
+            } else {
+                input.type = 'password';
+                btn.textContent = 'Show';
+            }
+        }
+
+        // Save API key to localStorage
+        document.getElementById('api-key').addEventListener('change', function() {
+            localStorage.setItem('anthropic_api_key', this.value);
+        });
+        // Load saved key
+        const savedKey = localStorage.getItem('anthropic_api_key');
+        if (savedKey) document.getElementById('api-key').value = savedKey;
 
         // Platform toggles
         document.querySelectorAll('.toggle').forEach(toggle => {
@@ -591,32 +650,150 @@ Example captions:
             btn.textContent = 'Re-transcribe All';
             btn.disabled = false;
 
+            transcribeResults = results;
             buildCaptionEditor(results);
         }
 
         function buildCaptionEditor(results) {
             const editor = document.getElementById('caption-editor');
             editor.classList.remove('hidden');
-            const inspiration = document.getElementById('inspiration-text').value;
 
-            let html = '<h3 style="margin-bottom:12px;color:#fff;">Edit Captions</h3>';
-            html += '<div class="info-box" style="margin-bottom:16px;">Review and edit each caption below. The transcript is shown for reference. Edit the caption to match your style.</div>';
+            let html = `
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                    <h3 style="color:#fff;">Edit Captions</h3>
+                    <button onclick="generateAllCaptions()" id="btn-generate-all" style="background:#8b5cf6;">
+                        Generate All Captions with AI
+                    </button>
+                </div>
+                <div class="info-box" style="margin-bottom:16px;">
+                    Transcripts are done. Click "Generate All Captions with AI" to auto-draft captions based on your style rules, or edit manually. You can also regenerate individual captions.
+                </div>
+                <div class="progress-bar hidden" id="generate-progress">
+                    <div class="progress-fill" style="width:0%"></div>
+                </div>
+                <p class="status-text" id="generate-status"></p>
+            `;
 
             results.forEach((r, i) => {
-                const matched = matchedFiles[i];
                 const transcript = r.success ? r.transcript : '(transcription failed)';
-                // Default caption is the transcript — user edits it
                 const defaultCaption = r.success ? r.transcript : '';
 
                 html += `
-                <div class="caption-card">
-                    <h3>${r.name}</h3>
-                    <div class="transcript">Transcript: ${transcript.substring(0, 200)}${transcript.length > 200 ? '...' : ''}</div>
+                <div class="caption-card" id="card-${i}">
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <h3>${r.name}</h3>
+                        <button onclick="regenerateCaption(${i})" class="secondary" style="font-size:11px; padding:4px 10px;">
+                            Regenerate
+                        </button>
+                    </div>
+                    <div class="transcript">Transcript: ${transcript.substring(0, 300)}${transcript.length > 300 ? '...' : ''}</div>
                     <textarea id="caption-${i}" data-index="${i}">${defaultCaption}</textarea>
                 </div>`;
             });
 
             editor.innerHTML = html;
+        }
+
+        function getApiKey() {
+            const key = document.getElementById('api-key').value.trim();
+            if (!key) {
+                alert('Enter your Anthropic API key in Step 3');
+                return null;
+            }
+            return key;
+        }
+
+        function getCaptionConfig() {
+            return {
+                client_rules: document.getElementById('client-rules').value.trim(),
+                example_captions: document.getElementById('example-captions').value.trim(),
+                inspiration: document.getElementById('inspiration-text').value.trim(),
+            };
+        }
+
+        async function generateAllCaptions() {
+            const apiKey = getApiKey();
+            if (!apiKey) return;
+            if (!transcribeResults.length) return alert('Transcribe videos first');
+
+            const btn = document.getElementById('btn-generate-all');
+            const progress = document.getElementById('generate-progress');
+            const status = document.getElementById('generate-status');
+            const config = getCaptionConfig();
+
+            btn.disabled = true;
+            btn.textContent = 'Generating...';
+            progress.classList.remove('hidden');
+
+            const total = transcribeResults.length;
+
+            for (let i = 0; i < total; i++) {
+                const r = transcribeResults[i];
+                if (!r.success) continue;
+
+                status.textContent = `Generating caption ${i + 1} of ${total}: ${r.name}...`;
+                progress.querySelector('.progress-fill').style.width = ((i + 1) / total * 100) + '%';
+
+                try {
+                    const resp = await fetch('/api/generate-caption', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({
+                            transcript: r.transcript,
+                            api_key: apiKey,
+                            ...config,
+                        })
+                    });
+                    const data = await resp.json();
+                    if (data.success) {
+                        const textarea = document.getElementById(`caption-${i}`);
+                        if (textarea) textarea.value = data.caption;
+                    }
+                } catch (e) {
+                    console.error(`Caption generation failed for ${r.name}:`, e);
+                }
+            }
+
+            status.textContent = `Done! All captions generated. Review and edit below.`;
+            btn.textContent = 'Regenerate All Captions';
+            btn.disabled = false;
+        }
+
+        async function regenerateCaption(index) {
+            const apiKey = getApiKey();
+            if (!apiKey) return;
+
+            const r = transcribeResults[index];
+            if (!r || !r.success) return;
+
+            const config = getCaptionConfig();
+            const card = document.getElementById(`card-${index}`);
+            const textarea = document.getElementById(`caption-${index}`);
+            const btn = card.querySelector('button');
+
+            btn.disabled = true;
+            btn.textContent = '...';
+
+            try {
+                const resp = await fetch('/api/generate-caption', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        transcript: r.transcript,
+                        api_key: apiKey,
+                        ...config,
+                    })
+                });
+                const data = await resp.json();
+                if (data.success && textarea) {
+                    textarea.value = data.caption;
+                }
+            } catch (e) {
+                console.error('Regenerate failed:', e);
+            }
+
+            btn.disabled = false;
+            btn.textContent = 'Regenerate';
         }
 
         function getActivePlatforms() {

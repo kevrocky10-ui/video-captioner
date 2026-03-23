@@ -3,3 +3,4 @@ openai-whisper
 beautifulsoup4
 requests
 imageio-ffmpeg
+anthropic

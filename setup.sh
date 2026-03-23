@@ -9,7 +9,7 @@ if ! command -v python3 &> /dev/null; then
 fi
 
 echo "Installing dependencies..."
-pip3 install flask openai-whisper beautifulsoup4 requests imageio-ffmpeg
+pip3 install -r requirements.txt
 
 echo ""
 echo "✅ Setup complete!"

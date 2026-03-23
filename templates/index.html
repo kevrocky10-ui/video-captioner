@@ -292,6 +292,7 @@
             </div>
             <div class="input-row">
                 <input type="text" id="local-path" placeholder="Local video folder path (e.g. /Users/you/Videos/client)">
+                <button class="secondary" onclick="browseFolder()">Browse</button>
                 <button onclick="scanLocal()">Scan Local</button>
             </div>
 
@@ -504,6 +505,20 @@ You can earn well and still be financially trapped. Income is not the same thing
             const container = document.getElementById('time-slots');
             if (container.querySelectorAll('.time-slot').length > 1) {
                 btn.parentElement.remove();
+            }
+        }
+
+        // Folder picker
+        async function browseFolder() {
+            const resp = await fetch('/api/pick-folder', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({})
+            });
+            const data = await resp.json();
+            if (data.success) {
+                document.getElementById('local-path').value = data.path;
+                scanLocal();
             }
         }
 

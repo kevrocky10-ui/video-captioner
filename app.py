@@ -189,6 +189,24 @@ def index():
     return render_template("index.html")
 
 
+@app.route("/api/pick-folder", methods=["POST"])
+def pick_folder():
+    """Open a native folder picker dialog."""
+    try:
+        import tkinter as tk
+        from tkinter import filedialog
+        root = tk.Tk()
+        root.withdraw()
+        root.attributes("-topmost", True)
+        folder = filedialog.askdirectory(title="Select Video Folder")
+        root.destroy()
+        if folder:
+            return jsonify({"success": True, "path": folder})
+        return jsonify({"success": False, "error": "No folder selected"})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
 @app.route("/api/scan-drive", methods=["POST"])
 def scan_drive():
     data = request.json

@@ -191,16 +191,14 @@ def index():
 
 @app.route("/api/pick-folder", methods=["POST"])
 def pick_folder():
-    """Open a native folder picker dialog."""
+    """Open a native folder picker dialog using AppleScript (macOS)."""
     try:
-        import tkinter as tk
-        from tkinter import filedialog
-        root = tk.Tk()
-        root.withdraw()
-        root.attributes("-topmost", True)
-        folder = filedialog.askdirectory(title="Select Video Folder")
-        root.destroy()
-        if folder:
+        result = subprocess.run(
+            ["osascript", "-e", 'POSIX path of (choose folder with prompt "Select Video Folder")'],
+            capture_output=True, text=True, timeout=60
+        )
+        if result.returncode == 0:
+            folder = result.stdout.strip().rstrip("/")
             return jsonify({"success": True, "path": folder})
         return jsonify({"success": False, "error": "No folder selected"})
     except Exception as e:

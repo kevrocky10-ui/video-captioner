@@ -585,4 +585,4 @@ def export_csv():
 if __name__ == "__main__":
     print("\n✅ Video Captioner is running!")
     print("   Open http://localhost:5555 in your browser\n")
-    app.run(debug=True, port=5555)
+    app.run(debug=True, port=5555, use_reloader=False)

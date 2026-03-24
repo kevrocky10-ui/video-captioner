@@ -70,69 +70,154 @@ VIDEO TRANSCRIPT:
 # ---------------------------------------------------------------------------
 
 def scrape_drive_folder(folder_url: str) -> list[dict]:
-    """Scrape file names and direct links from a *public* Google Drive folder."""
-    # Extract folder ID from URL
+    """Scrape file names and direct links from a *public* Google Drive folder.
+
+    Uses multiple strategies:
+    1. Google Drive API with embedded key (works for truly public folders)
+    2. Scrape the HTML page for embedded JSON data
+    3. Parse any file IDs and names from the raw page source
+    """
+    # Extract folder ID from various URL formats
     match = re.search(r'folders/([a-zA-Z0-9_-]+)', folder_url)
     if not match:
-        raise ValueError("Could not extract folder ID from URL")
-    folder_id = match.group(1)
+        match = re.search(r'id=([a-zA-Z0-9_-]+)', folder_url)
+    if not match:
+        # Maybe they pasted just the ID
+        if re.match(r'^[a-zA-Z0-9_-]{10,}$', folder_url.strip()):
+            folder_id = folder_url.strip()
+        else:
+            raise ValueError("Could not extract folder ID from URL. Make sure the folder is set to 'Anyone with the link'.")
+    else:
+        folder_id = match.group(1)
 
-    files = []
-    page_token = None
+    video_extensions = {".mp4", ".mov", ".avi", ".mkv", ".webm", ".m4v", ".MP4", ".MOV", ".mts", ".MTS"}
 
-    while True:
-        api_url = (
-            f"https://www.googleapis.com/drive/v3/files"
-            f"?q='{folder_id}'+in+parents"
-            f"&fields=nextPageToken,files(id,name,mimeType,webViewLink)"
-            f"&pageSize=1000"
-            f"&key=AIzaSyC1qbk72OEhAETMjQ9CkEN-r-0n4B3FMHE"
-        )
-        if page_token:
-            api_url += f"&pageToken={page_token}"
+    # Strategy 1: Try the public embedLink/export approach
+    files = _scrape_drive_embed(folder_id, video_extensions)
+    if files:
+        return files
 
-        resp = requests.get(api_url, timeout=30)
+    # Strategy 2: Try HTML scrape with multiple patterns
+    files = _scrape_drive_html(folder_id, video_extensions)
+    if files:
+        return files
 
-        # Fallback: try scraping HTML if API key doesn't work
+    raise ValueError(
+        f"Could not read files from this Drive folder. "
+        f"Make sure the folder sharing is set to 'Anyone with the link' can view. "
+        f"Folder ID detected: {folder_id}"
+    )
+
+
+def _scrape_drive_embed(folder_id: str, video_extensions: set) -> list[dict]:
+    """Use Google's public embed page which lists files without needing JS rendering."""
+    try:
+        url = f"https://drive.google.com/embeddedfolderview?id={folder_id}#list"
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        }
+        resp = requests.get(url, headers=headers, timeout=30)
         if resp.status_code != 200:
-            return _scrape_drive_html(folder_id)
+            return []
 
-        data = resp.json()
-        for f in data.get("files", []):
-            if f.get("mimeType", "").startswith("video/"):
-                files.append({
-                    "name": f["name"],
-                    "drive_link": f.get("webViewLink", f"https://drive.google.com/file/d/{f['id']}/view"),
-                    "id": f["id"],
-                })
+        files = []
+        html = resp.text
 
-        page_token = data.get("nextPageToken")
-        if not page_token:
-            break
+        # The embedded view contains file entries with IDs and names
+        # Pattern: data-id="FILE_ID" ... filename text
+        from bs4 import BeautifulSoup
+        soup = BeautifulSoup(html, "html.parser")
 
-    return sorted(files, key=lambda x: x["name"])
+        # Look for flip entries (embedded folder view format)
+        for entry in soup.find_all("div", class_="flip-entry"):
+            file_id_el = entry.get("id", "")
+            # Also check data attributes
+            file_id = entry.get("data-id", "") or file_id_el.replace("entry-", "")
+            title_el = entry.find("div", class_="flip-entry-title")
+            if title_el:
+                name = title_el.get_text(strip=True)
+                if any(name.lower().endswith(ext.lower()) for ext in video_extensions):
+                    files.append({
+                        "name": name,
+                        "drive_link": f"https://drive.google.com/file/d/{file_id}/view?usp=sharing",
+                        "id": file_id,
+                    })
+
+        # Also try parsing raw JS data in the page
+        if not files:
+            # Google sometimes embeds file data as JSON-like structures
+            id_pattern = re.compile(r'\\x22([a-zA-Z0-9_-]{20,60})\\x22')
+            name_pattern = re.compile(r'\\x22([^\\]+\.(?:mp4|mov|avi|mkv|webm|m4v))\\x22', re.IGNORECASE)
+
+            file_ids = id_pattern.findall(html)
+            file_names = name_pattern.findall(html)
+
+            # Try to pair them up
+            seen = set()
+            for name in file_names:
+                if name not in seen:
+                    seen.add(name)
+                    # Find the closest preceding file ID
+                    name_pos = html.find(name)
+                    best_id = None
+                    best_dist = float('inf')
+                    for fid in file_ids:
+                        fid_pos = html.rfind(fid, 0, name_pos)
+                        if fid_pos >= 0 and (name_pos - fid_pos) < best_dist:
+                            best_dist = name_pos - fid_pos
+                            best_id = fid
+                    if best_id:
+                        files.append({
+                            "name": name,
+                            "drive_link": f"https://drive.google.com/file/d/{best_id}/view?usp=sharing",
+                            "id": best_id,
+                        })
+
+        return sorted(files, key=lambda x: x["name"])
+    except Exception:
+        return []
 
 
-def _scrape_drive_html(folder_id: str) -> list[dict]:
-    """Fallback HTML scraper for public Drive folders."""
-    url = f"https://drive.google.com/drive/folders/{folder_id}"
-    headers = {"User-Agent": "Mozilla/5.0"}
-    resp = requests.get(url, headers=headers, timeout=30)
-    resp.raise_for_status()
+def _scrape_drive_html(folder_id: str, video_extensions: set) -> list[dict]:
+    """Fallback: scrape the regular Drive folder page."""
+    try:
+        url = f"https://drive.google.com/drive/folders/{folder_id}"
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        }
+        resp = requests.get(url, headers=headers, timeout=30)
+        if resp.status_code != 200:
+            return []
 
-    files = []
-    # Google Drive embeds file data in JS — look for patterns
-    pattern = re.compile(r'\["([a-zA-Z0-9_-]{20,})",\["([^"]+\.(mp4|mov|avi|mkv|webm|m4v))"', re.IGNORECASE)
-    for match in pattern.finditer(resp.text):
-        file_id = match.group(1)
-        file_name = match.group(2)
-        files.append({
-            "name": file_name,
-            "drive_link": f"https://drive.google.com/file/d/{file_id}/view",
-            "id": file_id,
-        })
+        html = resp.text
+        files = []
 
-    return sorted(files, key=lambda x: x["name"])
+        # Multiple regex patterns to catch Google's various data formats
+        patterns = [
+            # Pattern 1: ["FILE_ID",["filename.mp4"
+            re.compile(r'\["([a-zA-Z0-9_-]{20,60})",\s*\["([^"]+\.(?:mp4|mov|avi|mkv|webm|m4v))"', re.IGNORECASE),
+            # Pattern 2: "FILE_ID" ... "filename.mp4" in close proximity
+            re.compile(r'"([a-zA-Z0-9_-]{25,45})"[^"]{0,200}"([^"]+\.(?:mp4|mov|avi|mkv|webm|m4v))"', re.IGNORECASE),
+            # Pattern 3: data encoded with \x22 escapes
+            re.compile(r'\\x22([a-zA-Z0-9_-]{25,45})\\x22[^\\]{0,200}\\x22([^\\]+\.(?:mp4|mov|avi|mkv|webm|m4v))\\x22', re.IGNORECASE),
+        ]
+
+        seen_names = set()
+        for pattern in patterns:
+            for m in pattern.finditer(html):
+                file_id = m.group(1)
+                file_name = m.group(2)
+                if file_name not in seen_names:
+                    seen_names.add(file_name)
+                    files.append({
+                        "name": file_name,
+                        "drive_link": f"https://drive.google.com/file/d/{file_id}/view?usp=sharing",
+                        "id": file_id,
+                    })
+
+        return sorted(files, key=lambda x: x["name"])
+    except Exception:
+        return []
 
 
 # ---------------------------------------------------------------------------
@@ -211,8 +296,13 @@ def scan_drive():
     folder_url = data.get("folder_url", "")
     try:
         files = scrape_drive_folder(folder_url)
+        if not files:
+            return jsonify({
+                "success": False,
+                "error": "No video files found in this Drive folder. Make sure: (1) the folder is set to 'Anyone with the link' can view, and (2) it contains video files (mp4, mov, etc.)"
+            }), 400
         SESSION["drive_files"] = files
-        return jsonify({"success": True, "files": files})
+        return jsonify({"success": True, "files": files, "count": len(files)})
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 400
 

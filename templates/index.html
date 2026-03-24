@@ -402,6 +402,12 @@ You can earn well and still be financially trapped. Income is not the same thing
             </div>
             <p class="status-text" id="transcribe-status"></p>
 
+            <!-- Debug Log -->
+            <div id="debug-log" class="hidden" style="margin-top:12px; background:#0a0a0a; border:1px solid #333; border-radius:8px; padding:12px; max-height:300px; overflow-y:auto; font-family:monospace; font-size:12px;">
+                <div style="color:#666; margin-bottom:8px;">Debug Log:</div>
+                <div id="debug-log-content"></div>
+            </div>
+
             <div id="caption-editor" class="hidden" style="margin-top:16px;"></div>
         </div>
 
@@ -622,6 +628,21 @@ You can earn well and still be financially trapped. Income is not the same thing
             list.innerHTML = html;
         }
 
+        function addDebugLog(msg, type = 'info') {
+            const log = document.getElementById('debug-log');
+            const content = document.getElementById('debug-log-content');
+            log.classList.remove('hidden');
+
+            const colors = {info: '#4fc3f7', success: '#66bb6a', error: '#ef5350', warn: '#ffa726'};
+            const time = new Date().toLocaleTimeString();
+            const line = document.createElement('div');
+            line.style.color = colors[type] || '#999';
+            line.style.marginBottom = '4px';
+            line.textContent = `[${time}] ${msg}`;
+            content.appendChild(line);
+            log.scrollTop = log.scrollHeight;
+        }
+
         async function transcribeAll() {
             const btn = document.getElementById('btn-transcribe');
             const progress = document.getElementById('transcribe-progress');
@@ -634,14 +655,20 @@ You can earn well and still be financially trapped. Income is not the same thing
             btn.textContent = 'Transcribing...';
             progress.classList.remove('hidden');
 
-            const inspiration = document.getElementById('inspiration-text').value;
+            // Clear debug log
+            document.getElementById('debug-log-content').innerHTML = '';
+
             const total = matchedFiles.length;
             const results = [];
+
+            addDebugLog(`Starting transcription of ${total} videos using "${model}" model...`);
 
             for (let i = 0; i < total; i++) {
                 const m = matchedFiles[i];
                 status.textContent = `Transcribing ${i + 1} of ${total}: ${m.local_name}...`;
                 progress.querySelector('.progress-fill').style.width = ((i + 1) / total * 100) + '%';
+
+                addDebugLog(`[${i+1}/${total}] Transcribing: ${m.local_name} (${m.local_path})`);
 
                 try {
                     const resp = await fetch('/api/transcribe', {
@@ -653,15 +680,23 @@ You can earn well and still be financially trapped. Income is not the same thing
                     if (data.success) {
                         transcripts[m.local_path] = data.transcript;
                         results.push({name: m.local_name, transcript: data.transcript, success: true});
+                        const preview = data.transcript.substring(0, 80) + (data.transcript.length > 80 ? '...' : '');
+                        addDebugLog(`[${i+1}/${total}] ✓ ${m.local_name}: "${preview}"`, 'success');
                     } else {
                         results.push({name: m.local_name, error: data.error, success: false});
+                        addDebugLog(`[${i+1}/${total}] ✗ ${m.local_name}: ${data.error}`, 'error');
                     }
                 } catch (e) {
                     results.push({name: m.local_name, error: e.message, success: false});
+                    addDebugLog(`[${i+1}/${total}] ✗ ${m.local_name}: ${e.message}`, 'error');
                 }
             }
 
-            status.textContent = `Done! ${results.filter(r => r.success).length} of ${total} transcribed.`;
+            const successCount = results.filter(r => r.success).length;
+            const failCount = results.filter(r => !r.success).length;
+            status.textContent = `Done! ${successCount} of ${total} transcribed.`;
+            addDebugLog(`Finished: ${successCount} succeeded, ${failCount} failed`, successCount === total ? 'success' : 'warn');
+
             btn.textContent = 'Re-transcribe All';
             btn.disabled = false;
 

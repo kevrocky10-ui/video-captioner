@@ -383,27 +383,37 @@ def transcribe():
         SESSION["transcriptions"][video_path] = text
         return jsonify({"success": True, "transcript": text})
     except Exception as e:
-        return jsonify({"success": False, "error": str(e)}), 500
+        import traceback
+        error_detail = f"{type(e).__name__}: {str(e)}\n{traceback.format_exc()}"
+        print(f"Transcription error for {video_path}: {error_detail}")
+        return jsonify({"success": False, "error": f"{type(e).__name__}: {str(e)}"}), 500
 
 
 @app.route("/api/transcribe-all", methods=["POST"])
 def transcribe_all():
-    """Transcribe all matched videos."""
+    """Transcribe all matched videos with streaming progress."""
     data = request.json
     model_name = data.get("model", "base")
     matched = SESSION.get("matched", [])
 
-    results = []
-    for i, m in enumerate(matched):
-        path = m["local_path"]
-        try:
-            text = transcribe_video(path, model_name)
-            SESSION["transcriptions"][path] = text
-            results.append({"name": m["local_name"], "transcript": text, "success": True})
-        except Exception as e:
-            results.append({"name": m["local_name"], "error": str(e), "success": False})
+    def generate():
+        total = len(matched)
+        for i, m in enumerate(matched):
+            path = m["local_path"]
+            name = m["local_name"]
+            try:
+                # Send progress update
+                yield f"data: {json.dumps({'type': 'progress', 'current': i+1, 'total': total, 'name': name, 'status': 'transcribing'})}\n\n"
+                text = transcribe_video(path, model_name)
+                SESSION["transcriptions"][path] = text
+                yield f"data: {json.dumps({'type': 'result', 'current': i+1, 'total': total, 'name': name, 'transcript': text, 'success': True})}\n\n"
+            except Exception as e:
+                error_msg = str(e)
+                yield f"data: {json.dumps({'type': 'result', 'current': i+1, 'total': total, 'name': name, 'error': error_msg, 'success': False})}\n\n"
 
-    return jsonify({"success": True, "results": results})
+        yield f"data: {json.dumps({'type': 'done', 'total': total})}\n\n"
+
+    return app.response_class(generate(), mimetype='text/event-stream')
 
 
 @app.route("/api/generate-caption", methods=["POST"])

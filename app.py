@@ -3,8 +3,12 @@ import re
 import csv
 import json
 import glob
+import ssl
 import subprocess
 import tempfile
+
+# Fix SSL certificate issues on some macOS installs
+ssl._create_default_https_context = ssl._create_unverified_context
 from datetime import datetime, timedelta
 from io import StringIO
 from pathlib import Path

@@ -130,9 +130,10 @@ def _scrape_drive_embed(folder_id: str, video_extensions: set) -> list[dict]:
 
         # Look for flip entries (embedded folder view format)
         for entry in soup.find_all("div", class_="flip-entry"):
-            file_id_el = entry.get("id", "")
-            # Also check data attributes
-            file_id = entry.get("data-id", "") or file_id_el.replace("entry-", "")
+            entry_id = entry.get("id", "")
+            file_id = entry_id.replace("entry-", "") if entry_id.startswith("entry-") else entry_id
+            if not file_id:
+                continue
             title_el = entry.find("div", class_="flip-entry-title")
             if title_el:
                 name = title_el.get_text(strip=True)
